@@ -1,54 +1,43 @@
-import Mathlib.Data.Set.Basic
+import Mathlib.Data.Set.Language
 import Mathlib.Computability.TuringMachine
-import Mathlib.Order.Filter.Basic
-
-open Set TuringMachine
+import Mathlib.Probability.ProbabilitySpace
+import Mathlib.Analysis.Calculus.Asymptotics
 
 namespace PnP
 
--- Binary alphabet
-def Binary : Type := Bool
+open Set TuringMachine ProbabilityTheory
 
--- A language over binary strings
-def Language : Type := Set (List Binary)
+variable {Σ : Type} [Fintype Σ] (hΣ : Σ ≃ Bool)
 
-/-- Polynomial-time decider: a Turing machine decides L within n^k steps. -/
-def IsPolyTimeDecider (M : TuringMachine Binary) (L : Language) : Prop :=
-  M decides L ∧ ∃ (c k : ℕ), ∀ (s : List Binary), M.runTime s ≤ c * s.length ^ k
+def Language (Σ : Type) := Set (List Σ)
 
-/-- Class P: languages decidable by a polynomial-time Turing machine. -/
-def P (L : Language) : Prop :=
-  ∃ M : TuringMachine Binary, IsPolyTimeDecider M L
+def IsPolyTimeDecider (M : TuringMachine Σ) (L : Language Σ) : Prop :=
+  M decides L ∧ ∃ (c k : ℕ), ∀ (s : List Σ), M.runTime s ≤ c * s.length ^ k
 
-/-- Polynomial-time verifier (Cook-Karp certificate definition). -/
-def IsPolyTimeVerifier (V : TuringMachine Binary) (L : Language) : Prop :=
-  ∃ (c k : ℕ), ∀ s, s ∈ L ↔ ∃ (cert : List Binary),
-    V.runTime (s ++ cert) ≤ c * (s.length + cert.length) ^ k ∧
-    V.accepts (s ++ cert)
+def P (Σ : Type) [Fintype Σ] : Set (Language Σ) :=
+  { L | ∃ M : TuringMachine Σ, IsPolyTimeDecider M L }
 
-/-- Class NP: languages with a polynomial-time verifier. -/
-def NP (L : Language) : Prop :=
-  ∃ V : TuringMachine Binary, IsPolyTimeVerifier V L
+def IsPolyTimeVerifier (V : TuringMachine Σ) (L : Language Σ) : Prop :=
+  ∃ (c k : ℕ), ∀ s, s ∈ L ↔ ∃ (cert : List Σ),
+    V.runTime (s ++ cert) ≤ c * (s.length + cert.length) ^ k ∧ V.accepts (s ++ cert)
 
-/--
-  Paper lemma: from a polynomial-time verifier V for L, construct a
-  deterministic polynomial-time decider. The verifier itself runs in
-  polynomial time on each certificate trial, so searching over certificates
-  yields a polynomial-time decision procedure.
--/
-lemma verifier_gives_decider (L : Language)
-  (h : NP L) : P L := by
-  exact h
+def NP (Σ : Type) [Fintype Σ] : Set (Language Σ) :=
+  { L | ∃ V : TuringMachine Σ, IsPolyTimeVerifier V L }
 
-/-- Standard inclusion P ⊆ NP. -/
-lemma p_subset_np (L : Language) (h : P L) : NP L := by
-  exact h
+lemma sampling_locates_poly_decider
+  (L : Language Σ) (hL : L ∈ NP Σ)
+  (h_exists : ∃ M : TuringMachine Σ, IsPolyTimeDecider M L) :
+  ∃ (sampling_seq : ℕ → TuringMachine Σ),
+    Filter.Tendsto (fun k ↦ (1 - p) ^ k) Filter.atTop (nhd 0) ∧
+    prob (fun ω ↦ ∃ k, sampling_seq k = M) = 1 := by
+  sorry
 
-/-- Main theorem: P = NP. -/
-theorem paper_main : ∀ (L : Language), NP L ↔ P L := by
-  intro L
-  constructor
-  · exact verifier_gives_decider L
-  · exact p_subset_np L
+theorem paper_main : P Σ = NP Σ := by
+  have h1 : NP Σ ⊆ P Σ := by
+    intro L hL
+    have h_main : ∃ M : TuringMachine Σ, IsPolyTimeDecider M L := by sorry
+    exact h_main
+  have h2 : P Σ ⊆ NP Σ := by sorry
+  apply Set.Subset.antisymm h1 h2
 
 end PnP
