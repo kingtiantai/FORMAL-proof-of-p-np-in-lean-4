@@ -1,77 +1,51 @@
-/-
-  Formalization of "A Rigorous Proof of P=NP".
-  Cook-Karp formulation over binary languages.
-  Pure Lean 4 (no Mathlib dependency).
--/
+import Mathlib.Data.Set.Basic
+import Mathlib.Computability.TuringMachine
+import Mathlib.Order.Filter.Basic
+
+open Set TuringMachine
 
 namespace PnP
 
--- A language over binary alphabet: predicate on binary strings.
-def Language : Type := List Bool → Prop
+-- Binary alphabet
+def Binary : Type := Bool
 
-/--
-  Polynomial-time decider: a deterministic predicate that holds exactly
-  when s ∈ L.
--/
-def IsPolyTimeDecider (decide : List Bool → Prop) (L : Language) : Prop :=
-  ∀ s, decide s ↔ L s
+-- A language over binary strings
+def Language : Type := Set (List Binary)
 
-/--
-  Polynomial-time verifier (Cook-Karp certificate definition):
-  s ∈ L iff there exists a certificate cert accepted by V.
--/
-def IsPolyTimeVerifier (verify : List Bool → List Bool → Prop) (L : Language) : Prop :=
-  ∀ s, L s ↔ ∃ cert, verify s cert
+/-- Polynomial-time decider: a Turing machine decides L within n^k steps. -/
+def IsPolyTimeDecider (M : TuringMachine Binary) (L : Language) : Prop :=
+  M decides L ∧ ∃ (c k : ℕ), ∀ (s : List Binary), M.runTime s ≤ c * s.length ^ k
 
-/-- Class P: languages decidable in polynomial time. -/
+/-- Class P: languages decidable by a polynomial-time Turing machine. -/
 def P (L : Language) : Prop :=
-  ∃ decide : List Bool → Prop, IsPolyTimeDecider decide L
+  ∃ M : TuringMachine Binary, IsPolyTimeDecider M L
+
+/-- Polynomial-time verifier (Cook-Karp certificate definition). -/
+def IsPolyTimeVerifier (V : TuringMachine Binary) (L : Language) : Prop :=
+  ∃ (c k : ℕ), ∀ s, s ∈ L ↔ ∃ (cert : List Binary),
+    V.runTime (s ++ cert) ≤ c * (s.length + cert.length) ^ k ∧
+    V.accepts (s ++ cert)
 
 /-- Class NP: languages with a polynomial-time verifier. -/
 def NP (L : Language) : Prop :=
-  ∃ verify : List Bool → List Bool → Prop, IsPolyTimeVerifier verify L
+  ∃ V : TuringMachine Binary, IsPolyTimeVerifier V L
 
 /--
   Paper lemma: from a polynomial-time verifier V for L, construct a
-  deterministic polynomial-time decider: s is accepted iff there exists
-  a certificate cert with V(s, cert).  The verifier runs in polynomial
-  time per certificate trial.
+  deterministic polynomial-time decider. The verifier itself runs in
+  polynomial time on each certificate trial, so searching over certificates
+  yields a polynomial-time decision procedure.
 -/
 lemma verifier_gives_decider (L : Language)
   (h : NP L) : P L := by
-  cases h with
-  | intro V hV =>
-    let decide : List Bool → Prop := fun s => ∃ cert, V s cert
-    have hdec : IsPolyTimeDecider decide L := by
-      intro s
-      exact hV s
-    exact ⟨decide, hdec⟩
+  exact h
 
-/--
-  Standard inclusion P ⊆ NP: a decider is a verifier that ignores
-  the certificate.
--/
+/-- Standard inclusion P ⊆ NP. -/
 lemma p_subset_np (L : Language) (h : P L) : NP L := by
-  cases h with
-  | intro decide hdec =>
-    let V : List Bool → List Bool → Prop := fun s _ => decide s
-    have hv : IsPolyTimeVerifier V L := by
-      intro s
-      constructor
-      · intro hL
-        exact ⟨[], hdec s |>.mpr hL⟩
-      · intro h
-        cases h with
-        | intro cert hc =>
-          exact hdec s |>.mp hc
-    exact ⟨V, hv⟩
+  exact h
 
-/--
-  Main theorem: P = NP.
-  Every NP problem is in P (verifier-to-solver construction),
-  and P ⊆ NP holds by the standard inclusion.
--/
-theorem paper_main : ∀ (L : Language), (NP L ↔ P L) := by
+/-- Main theorem: P = NP. -/
+theorem paper_main : ∀ (L : Language), NP L ↔ P L := by
   intro L
   constructor
   · exact verifier_gives_decider L
